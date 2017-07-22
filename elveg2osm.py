@@ -518,8 +518,8 @@ def merge_equal(osmobj, merge_list):
     # Remove nvdb-tags
     for way_id in merge_list:
         way = osmobj.ways[way_id]
-        way.tags.pop('nvdb:id')
-        way.tags.pop('nvdb:date')
+        way.tags.pop('nvdb:id', None)
+        way.tags.pop('nvdb:date', None)
         way.tags.pop('nvdb:id:part', None)
 
     # Split the ways in merge_list into subsets with identical tags
@@ -581,414 +581,414 @@ def merge_equal(osmobj, merge_list):
 ###########################################################
 #           main                                          #
 ###########################################################
-        
-# Read input arguments
-directory = sys.argv[1]
-if len(sys.argv) >= 3:
-    kommune_number = sys.argv[2]
-else:
-    kommune_number = directory.strip('/')[-4:]
-    # Check that it is really a number
-    kummune_int = int(kommune_number)
 
+def main(directory, kommune_number):
+    # Find the names of the other files
+    osm_input = os.path.join(directory, kommune_number + 'Elveg_default.osm')
+    osm_output = os.path.join(directory, kommune_number + 'Elveg.osm')
+    elveg_fart = os.path.join(directory, kommune_number + 'Fart.txt')
+    elveg_hoyde = os.path.join(directory, kommune_number + 'Hoyde.txt')
+    osm_barrier_output = os.path.join(directory, kommune_number + 'detatched_barriers.osm')
+    osm_deleted_output = os.path.join(directory, kommune_number + 'deleted_elements.osm')
 
-# Find the names of the other files
-osm_input = os.path.join(directory, kommune_number + 'Elveg_default.osm')
-osm_output = os.path.join(directory, kommune_number + 'Elveg.osm')
-elveg_fart = os.path.join(directory, kommune_number + 'Fart.txt')
-elveg_hoyde = os.path.join(directory, kommune_number + 'Hoyde.txt')
-osm_barrier_output = os.path.join(directory, kommune_number + 'detatched_barriers.osm')
-osm_deleted_output = os.path.join(directory, kommune_number + 'deleted_elements.osm')
-
-# Loop over speed limits and tags where the whole 
-# way where possible. Other places, add to split list
-roaddata = {}
-with open(elveg_fart, 'rb') as ef:
-    # Read first four header lines
-    ef_header = ef.next()
-    ef_export_line = ef.next()
-    ef_some_number = ef.next()
-    ef_empty_line = ef.next()
-    
-    # Then use csv module for reading data
-    reader = csv.DictReader(ef, delimiter=';')
-    for row in reader:
-        transid = row[' TransID']
-
-        fart_start = int(row['Fra'])
-        fart_stop =  int(row['   Til'])
-        fart_length = fart_stop - fart_start
-        fart_limit = row[' Fart']
-        fart_felt = row['felt']
-
-        if not roaddata.has_key(transid):
-            roaddata[transid] = {}
-        if not roaddata[transid].has_key('maxspeed'):
-            roaddata[transid]['maxspeed'] = []
-        roaddata[transid]['maxspeed'].append({'maxspeed': fart_limit,
-                                              'lanes': fart_felt,
-                                              'start': fart_start,
-                                              'stop': fart_stop})
-                                              
-# Add height limits to roaddata (if the file exists)
-if not os.path.isfile(elveg_hoyde):
-    warn(u"File {0} does not exist and is not used".format(elveg_hoyde))
-else:
-    with open(elveg_hoyde, 'rb') as eh:
+    # Loop over speed limits and tags where the whole 
+    # way where possible. Other places, add to split list
+    roaddata = {}
+    with open(elveg_fart, 'rb') as ef:
         # Read first four header lines
-        eh_header = eh.next()
-        eh_export_line = eh.next()
-        eh_empty_line1 = eh.next()
-        eh_empty_line2 = eh.next()
+        ef_header = ef.next()
+        ef_export_line = ef.next()
+        ef_some_number = ef.next()
+        ef_empty_line = ef.next()
 
         # Then use csv module for reading data
-        reader = csv.DictReader(eh, delimiter=';')
+        reader = csv.DictReader(ef, delimiter=';')
         for row in reader:
             transid = row[' TransID']
 
-            height_start = int(row['Fra'])
-            height_stop =  int(row['   Til'])
-            height_length = height_stop - height_start
-            height_limit = row['H\xf8yde']
-            height_felt = row['felt']
+            fart_start = int(row['Fra'])
+            fart_stop =  int(row['   Til'])
+            fart_length = fart_stop - fart_start
+            fart_limit = row[' Fart']
+            fart_felt = row['felt']
 
             if not roaddata.has_key(transid):
                 roaddata[transid] = {}
-            if not roaddata[transid].has_key('maxheight'):
-                roaddata[transid]['maxheight'] = []
-            roaddata[transid]['maxheight'].append({'maxheight': height_limit,
-                                                   'lanes': height_felt,
-                                                   'start': height_start,
-                                                   'stop': height_stop})
+            if not roaddata[transid].has_key('maxspeed'):
+                roaddata[transid]['maxspeed'] = []
+            roaddata[transid]['maxspeed'].append({'maxspeed': fart_limit,
+                                                  'lanes': fart_felt,
+                                                  'start': fart_start,
+                                                  'stop': fart_stop})
 
-# TODO: Add information from XXXXAksel.txt to roadddata,
-# and add relevant tagging.
+    # Add height limits to roaddata (if the file exists)
+    if not os.path.isfile(elveg_hoyde):
+        warn(u"File {0} does not exist and is not used".format(elveg_hoyde))
+    else:
+        with open(elveg_hoyde, 'rb') as eh:
+            # Read first four header lines
+            eh_header = eh.next()
+            eh_export_line = eh.next()
+            eh_empty_line1 = eh.next()
+            eh_empty_line2 = eh.next()
 
-# Read OSM file
-osmobj = ElvegOSM.load(osm_input)
+            # Then use csv module for reading data
+            reader = csv.DictReader(eh, delimiter=';')
+            for row in reader:
+                transid = row[' TransID']
 
-# Loop through all nodes and move tags to elveg_tags
-for nid,node in osmobj.nodes.items():
-    node.elveg_tags = node.tags
-    node.tags = {}
+                height_start = int(row['Fra'])
+                height_stop =  int(row['   Til'])
+                height_length = height_stop - height_start
+                height_limit = row['H\xf8yde']
+                height_felt = row['felt']
 
-# Loop through all ways in osmobj and 
-# - swap original tags with OSM tags.
-# - extract the way length from the Elveg VPA tag and
-#   store in roaddata structure
-# Important to use items() instead of iteritems() here as we are adding
-# items to the obmobj.ways dictionary during the loop.
-for wid,w in osmobj.ways.items():
-    # Add new tags (using the create_osmtags function)
-    w.elveg_tags = w.tags
-    osm_tags = create_osmtags(w.elveg_tags)
-    w.tags = osm_tags
+                if not roaddata.has_key(transid):
+                    roaddata[transid] = {}
+                if not roaddata[transid].has_key('maxheight'):
+                    roaddata[transid]['maxheight'] = []
+                roaddata[transid]['maxheight'].append({'maxheight': height_limit,
+                                                       'lanes': height_felt,
+                                                       'start': height_start,
+                                                       'stop': height_stop})
 
-    # Check that way has VPA Elveg tag
-    if not w.elveg_tags.has_key('VPA'):
-        warn(u"VPA missing for OBJTYPE {OBJTYPE} with TRANSID {TRANSID}".format(**w.elveg_tags))
-        continue
+    # TODO: Add information from XXXXAksel.txt to roadddata,
+    # and add relevant tagging.
 
-    # Add way length as given by VPA to the roadddata structure
-    transid = w.elveg_tags['TRANSID']
-    vpa = [int(n.strip(':;')) for n in w.elveg_tags["VPA"].split()]
-    # We do not care about those ways where we have no data to add,
-    # so move to next if this is the case.
-    if not roaddata.has_key(transid):
-        continue
-    roaddata[transid]['length'] = vpa[2] - vpa[1]
-    
-    # make a sorted list of meter values, including end
-    # points, where some roaddata may change
-    end_points = [0, roaddata[transid]['length']]
-    for restriction_type in ['maxspeed', 'maxheight']: # Add any new restrictions here
-        for endpoint_type in ['start', 'stop']:
-            end_points.extend([d[endpoint_type] for d in roaddata[transid].get(restriction_type, [])])
-    end_points = list(set(end_points))
-    end_points.sort()
-    
-    # Test endpoints from .txt files against VPA lengths
-    # There are several ways where the end point is outside the VPA meter range
-    # Remove those TRANSIDs from the roaddata structure and move on to next way
-    if end_points[-1] > roaddata[transid]['length']:
-        warntemplate = u"Warning: End point {0} m outside of VPA length of road ({1} m) for TRANSID {2}"
-        warnstring = warntemplate.format(end_points[-1], roaddata[transid]['length'], transid)
-        warn(warnstring)
-        del roaddata[transid]
-        continue
+    # Read OSM file
+    osmobj = ElvegOSM.load(osm_input)
 
-    # Make a list of intervals, representing the new ways after a split
-    # For most ways, there will be only one interval, but whenever
-    # the speed limit changes on a way or a height restriction
-    # does not apply to the whole way, there will be more than one interval
-    interval_list = zip(end_points[:-1],end_points[1:])
+    # Loop through all nodes and move tags to elveg_tags
+    for nid,node in osmobj.nodes.items():
+        node.elveg_tags = node.tags
+        node.tags = {}
 
-    # Make a list of tags (maxheight=*, maxspeed=*)
-    # with one list entry per new way interval
-    newway_tags = [{} for i in interval_list] # I.e. a list of empty dicts
-    for i,interval in enumerate(interval_list):
+    # Loop through all ways in osmobj and 
+    # - swap original tags with OSM tags.
+    # - extract the way length from the Elveg VPA tag and
+    #   store in roaddata structure
+    # Important to use items() instead of iteritems() here as we are adding
+    # items to the obmobj.ways dictionary during the loop.
+    for wid,w in osmobj.ways.items():
+        # Add new tags (using the create_osmtags function)
+        w.elveg_tags = w.tags
+        osm_tags = create_osmtags(w.elveg_tags)
+        w.tags = osm_tags
+
+        # Check that way has VPA Elveg tag
+        if not w.elveg_tags.has_key('VPA'):
+            warn(u"VPA missing for OBJTYPE {OBJTYPE} with TRANSID {TRANSID}".format(**w.elveg_tags))
+            continue
+
+        # Add way length as given by VPA to the roadddata structure
+        transid = w.elveg_tags['TRANSID']
+        vpa = [int(n.strip(':;')) for n in w.elveg_tags["VPA"].split()]
+        # We do not care about those ways where we have no data to add,
+        # so move to next if this is the case.
+        if not roaddata.has_key(transid):
+            continue
+        roaddata[transid]['length'] = vpa[2] - vpa[1]
+
+        # make a sorted list of meter values, including end
+        # points, where some roaddata may change
+        end_points = [0, roaddata[transid]['length']]
         for restriction_type in ['maxspeed', 'maxheight']: # Add any new restrictions here
-            for j,restr in enumerate(roaddata[transid].get(restriction_type, [])):
-                if restr['start'] <= interval[0] and interval[1] <= restr['stop']:
-                    #if not w.elveg_tags.has_key('VKJORFLT'):
-                    #    print w.elveg_tags
-                    #warn(str((restr['lanes'], w.elveg_tags.get('VKJORFLT'))))
-                    if restr['lanes'] == w.elveg_tags.get('VKJORFLT', ''):
-                        # The restriction applies to all lanes of the road
-                        newway_tags[i][restriction_type] = restr[restriction_type]
-                    elif restr['lanes'] == '1' and w.elveg_tags.get('VKJORFLT') == "1#2":
-                        #warn("DEBUG: Heeding different lanes for restriction {} on TRANSID {} with lanes {} and restriction lanes {}".format(restriction_type, w.elveg_tags.get('TRANSID'), w.elveg_tags.get('VKJORFLT'), restr['lanes']))
-                        newway_tags[i][restriction_type + ':forward'] = restr[restriction_type]
-                    elif restr['lanes'] == '2' and w.elveg_tags.get('VKJORFLT') == "1#2":
-                        #warn("DEBUG: Heeding different lanes for restriction {} on TRANSID {} with lanes {} and restriction lanes {}".format(restriction_type, w.elveg_tags.get('TRANSID'), w.elveg_tags.get('VKJORFLT'), restr['lanes']))
-                        newway_tags[i][restriction_type + ':backward'] = restr[restriction_type]
-                    else:
-                        warn("Warning: Not heeding different lanes for restriction {} on TRANSID {} with lanes {} and restriction lanes {}".format(restriction_type,
-                                                                                                                                                   w.elveg_tags.get('TRANSID'),
-                                                                                                                                                   w.elveg_tags.get('VKJORFLT'),
-                                                                                                                                                   restr['lanes']))
-                        newway_tags[i][restriction_type] = restr[restriction_type]
+            for endpoint_type in ['start', 'stop']:
+                end_points.extend([d[endpoint_type] for d in roaddata[transid].get(restriction_type, [])])
+        end_points = list(set(end_points))
+        end_points.sort()
 
-    # DEBUG: Remove later
-    #print newway_tags
+        # Test endpoints from .txt files against VPA lengths
+        # There are several ways where the end point is outside the VPA meter range
+        # Remove those TRANSIDs from the roaddata structure and move on to next way
+        if end_points[-1] > roaddata[transid]['length']:
+            warntemplate = u"Warning: End point {0} m outside of VPA length of road ({1} m) for TRANSID {2}"
+            warnstring = warntemplate.format(end_points[-1], roaddata[transid]['length'], transid)
+            warn(warnstring)
+            del roaddata[transid]
+            continue
 
-    # Split the way in osmobj into the right number of segments
-    split_points = end_points[1:-1]
-    segment_ids = split_way(osmobj, w.id, split_points)
+        # Make a list of intervals, representing the new ways after a split
+        # For most ways, there will be only one interval, but whenever
+        # the speed limit changes on a way or a height restriction
+        # does not apply to the whole way, there will be more than one interval
+        interval_list = zip(end_points[:-1],end_points[1:])
 
-    # Add nvdb:id:part subkey to each part if the Elveg segment has been split
-    if len(segment_ids) > 1:
+        # Make a list of tags (maxheight=*, maxspeed=*)
+        # with one list entry per new way interval
+        newway_tags = [{} for i in interval_list] # I.e. a list of empty dicts
+        for i,interval in enumerate(interval_list):
+            for restriction_type in ['maxspeed', 'maxheight']: # Add any new restrictions here
+                for j,restr in enumerate(roaddata[transid].get(restriction_type, [])):
+                    if restr['start'] <= interval[0] and interval[1] <= restr['stop']:
+                        #if not w.elveg_tags.has_key('VKJORFLT'):
+                        #    print w.elveg_tags
+                        #warn(str((restr['lanes'], w.elveg_tags.get('VKJORFLT'))))
+                        if restr['lanes'] == w.elveg_tags.get('VKJORFLT', ''):
+                            # The restriction applies to all lanes of the road
+                            newway_tags[i][restriction_type] = restr[restriction_type]
+                        elif restr['lanes'] == '1' and w.elveg_tags.get('VKJORFLT') == "1#2":
+                            #warn("DEBUG: Heeding different lanes for restriction {} on TRANSID {} with lanes {} and restriction lanes {}".format(restriction_type, w.elveg_tags.get('TRANSID'), w.elveg_tags.get('VKJORFLT'), restr['lanes']))
+                            newway_tags[i][restriction_type + ':forward'] = restr[restriction_type]
+                        elif restr['lanes'] == '2' and w.elveg_tags.get('VKJORFLT') == "1#2":
+                            #warn("DEBUG: Heeding different lanes for restriction {} on TRANSID {} with lanes {} and restriction lanes {}".format(restriction_type, w.elveg_tags.get('TRANSID'), w.elveg_tags.get('VKJORFLT'), restr['lanes']))
+                            newway_tags[i][restriction_type + ':backward'] = restr[restriction_type]
+                        else:
+                            warn("Warning: Not heeding different lanes for restriction {} on TRANSID {} with lanes {} and restriction lanes {}".format(restriction_type,
+                                                                                                                                                       w.elveg_tags.get('TRANSID'),
+                                                                                                                                                       w.elveg_tags.get('VKJORFLT'),
+                                                                                                                                                       restr['lanes']))
+                            newway_tags[i][restriction_type] = restr[restriction_type]
+
+        # DEBUG: Remove later
+        #print newway_tags
+
+        # Split the way in osmobj into the right number of segments
+        split_points = end_points[1:-1]
+        segment_ids = split_way(osmobj, w.id, split_points)
+
+        # Add nvdb:id:part subkey to each part if the Elveg segment has been split
+        if len(segment_ids) > 1:
+            for i,segment_id in enumerate(segment_ids):
+                osmobj.ways[segment_id].tags['nvdb:id:part'] = str(i)
+
+        # Add maxheight and maxspeed restrictions
         for i,segment_id in enumerate(segment_ids):
-            osmobj.ways[segment_id].tags['nvdb:id:part'] = str(i)
-    
-    # Add maxheight and maxspeed restrictions
-    for i,segment_id in enumerate(segment_ids):
-        osmobj.ways[segment_id].tags.update(newway_tags[i])
+            osmobj.ways[segment_id].tags.update(newway_tags[i])
 
-# Loop through all ways 
-# - make a set of those nodes that are part of a way
-way_node_ids = set()
-for way in osmobj.ways.values():
-    way_node_ids.update(way.nds)
-# ... and those that are not part of a way
-noway_node_ids = set(osmobj.nodes).difference(way_node_ids)
+    # Loop through all ways 
+    # - make a set of those nodes that are part of a way
+    way_node_ids = set()
+    for way in osmobj.ways.values():
+        way_node_ids.update(way.nds)
+    # ... and those that are not part of a way
+    noway_node_ids = set(osmobj.nodes).difference(way_node_ids)
 
 
-# DATA CHECKING: Check if any way nodes also have tags, or if all tags
-# are on duplicate nodes
-#for waynode_id in way_nodes:
-#    waynode = osmobj.nodes[waynode_id]
-#    if len(waynode.tags) > 0:
-#        print waynode.tags
+    # DATA CHECKING: Check if any way nodes also have tags, or if all tags
+    # are on duplicate nodes
+    #for waynode_id in way_nodes:
+    #    waynode = osmobj.nodes[waynode_id]
+    #    if len(waynode.tags) > 0:
+    #        print waynode.tags
 
 
-# Create OSM object for manual merging of off-way barriers
-osmobj_barriers = ElvegOSM()
+    # Create OSM object for manual merging of off-way barriers
+    osmobj_barriers = ElvegOSM()
 
-# Loop through and process all single nodes
-for nid in noway_node_ids:
-    noway_node = osmobj.nodes[nid]
-    coord = (noway_node.lat, noway_node.lon)
-    if noway_node.elveg_tags['OBJTYPE'] == 'Vegsperring':
-        # Tag the barrier with OSM tags
-        vegsperringtype = noway_node.elveg_tags['VEGSPERRINGTYPE']
-        if vegsperringtype == 'Betongkjegle':
-            noway_node.tags['barrier'] = 'block'
-        elif vegsperringtype == u'Bilsperre':
-            # This seems to be any type of barrier that has wide enough
-            # openings to only stop cars.
-            noway_node.tags['barrier'] = 'yes'
-        elif vegsperringtype == u'Bussluse':
-            noway_node.tags['barrier'] = 'bus_trap'
-        elif vegsperringtype == u'L\xe5st bom':
-            noway_node.tags['barrier'] = 'gate'
-        elif vegsperringtype == u'New Jersey':
-            noway_node.tags['barrier'] = 'jersey_barrier'
-        elif vegsperringtype == u'R\xf8rgelender':
-            # This describes the material more than the actual barrier
-            # Similar to barrier=fence, but usually it is possible to
-            # walk or bike around
-            noway_node.tags['barrier'] = 'yes'
-        elif vegsperringtype == u'Steinblokk':
-            noway_node.tags['barrier'] = 'block'
-        elif vegsperringtype == u'Trafikkavviser':
-            # It seems that roads with this kind of barrier are 
-            # best tagged as footways in OSM.
-            # I suppose the barrier itself could be anything.
-            noway_node.tags['barrier'] = 'yes'
-        elif vegsperringtype == u'Ukjent':
-            noway_node.tags['barrier'] = 'yes'
-        else:
-            warn(u"Unknown barrier: {0}".format(vegsperringtype))
-            noway_node.tags['barrier'] = 'yes'
-    elif noway_node.elveg_tags['OBJTYPE'] == 'Kommunedele':
-        # We do not use this tag, mark this node for deletion
-        noway_node.tags['DEBUG'] = 'Kommunedele'
-        noway_node.tags['action'] = 'delete'
-    elif noway_node.elveg_tags['OBJTYPE'] == 'Ferjekai':
-        # These nodes are not connected to the road network
-        # In OSM, they should ideally be on the node between the road and the ferry route.
-        noway_node.tags['amenity'] = 'ferry_terminal'
-
-# TODO: Add amenity="ferry terminal" on nodes with OBJTYPE=Ferjekai
-
-# Remove all ways and non-way nodes with action=delete and delete unused nodes
-
-# Loop through ways, collect ways with action=delete and
-# id of nodes in ways
-to_delete = set()
-nodes_used = set()
-for way in osmobj.ways.itervalues():
-    if "action" in way.tags and way.tags['action'] == 'delete':
-        to_delete.add(way)
-    elif "nvdb:id" in way.tags and len(way.tags) == 1:
-        to_delete.add(way)
-    elif len(way.tags) == 0:
-        to_delete.add(way)
-    else:
-        for n in way.nds:
-            nodes_used.add(n)
-
-# Collects nodes which should be deleted
-for node in osmobj.nodes.itervalues():
-    if "action" in node.tags and node.tags['action'] == 'delete':
-        to_delete.add(node)
-    elif (node.id not in nodes_used) and (len(node.tags)) == 0:
-        to_delete.add(node)
-
-# Delete objects from output and add them to a separate file
-osmobj_deleted = ElvegOSM()
-for element in to_delete:
-    osmobj.discard(element)
-    osmobj_deleted.add(element)
-    if hasattr(element, 'elveg_tags'):
-        element.tags.update({'Elveg:' + k:v for k,v in element.elveg_tags.iteritems()})
-
-# Copy nodes needed by ways in osmobj_deleted
-for delway in osmobj_deleted.ways.itervalues():
-    for nid in delway.nds:
-        if not osmobj_deleted.nodes.has_key(nid):
-            osmobj_deleted.add(osmobj.nodes[nid])
-
-# Add way_id variable to every node which holds the way_ids of all ways
-# it is part of.
-# This is to be used in the node merging and must therefore be made after
-# ways have been deleted above.
-for node in osmobj.nodes.itervalues():
-    node.way_ids = set()
-for way in osmobj.ways.itervalues():
-    for node_id in way.nds:
-        node = osmobj.nodes[node_id]
-        node.way_ids.add(way.id)
-
-
-# Make a table with hash of indices of the nodes, in order to identify
-# nodes with (exactly) the same coordinates
-node_lookup = dict()
-for id,node in osmobj.nodes.iteritems():
-    key = (node.lat, node.lon)
-    if node_lookup.has_key(key):
-        node_lookup[key].append(id)
-    else:
-        node_lookup[key] = [id]
-
-# Merge nodes in same location
-for coord, node_id_list in node_lookup.items():
-    if len(node_id_list) == 1:
-        continue
-    else:
-        merge_nodes(node_id_list)
-
-# Speed limit cleanup
-for id,way in osmobj.ways.iteritems():
-    # Remove maxspeed:forward or maxspeed:backward if maxspeed is present
-    # (i.e. inconsistent specification - either redundant or conflicting)
-    if way.tags.has_key('maxspeed:forward') or way.tags.has_key('maxspeed:backward'):
-        if way.tags.has_key('maxspeed'):
-            # Redundant or conflicting specification - report which before removing maxspeed
-            if (way.tags['maxspeed'] == way.tags.get('maxspeed:forward', way.tags['maxspeed']) and
-                    way.tags['maxspeed'] == way.tags.get('maxspeed:backward', way.tags['maxspeed'])):
-                # Any maxspeed:forward and/or maxspeed:backward is compatible with maxspeed
-                # Remove those of maxspeed:forward and maxspeed:backward that exists
-                warn("Redundant maxspeed:forward and/or maxspeed:backward on TRANSID {}".format(way.elveg_tags['TRANSID']))
-                way.tags.pop('maxspeed:backward', None)
-                way.tags.pop('maxspeed:forward', None)
+    # Loop through and process all single nodes
+    for nid in noway_node_ids:
+        noway_node = osmobj.nodes[nid]
+        coord = (noway_node.lat, noway_node.lon)
+        if noway_node.elveg_tags['OBJTYPE'] == 'Vegsperring':
+            # Tag the barrier with OSM tags
+            vegsperringtype = noway_node.elveg_tags['VEGSPERRINGTYPE']
+            if vegsperringtype == 'Betongkjegle':
+                noway_node.tags['barrier'] = 'block'
+            elif vegsperringtype == u'Bilsperre':
+                # This seems to be any type of barrier that has wide enough
+                # openings to only stop cars.
+                noway_node.tags['barrier'] = 'yes'
+            elif vegsperringtype == u'Bussluse':
+                noway_node.tags['barrier'] = 'bus_trap'
+            elif vegsperringtype == u'L\xe5st bom':
+                noway_node.tags['barrier'] = 'gate'
+            elif vegsperringtype == u'New Jersey':
+                noway_node.tags['barrier'] = 'jersey_barrier'
+            elif vegsperringtype == u'R\xf8rgelender':
+                # This describes the material more than the actual barrier
+                # Similar to barrier=fence, but usually it is possible to
+                # walk or bike around
+                noway_node.tags['barrier'] = 'yes'
+            elif vegsperringtype == u'Steinblokk':
+                noway_node.tags['barrier'] = 'block'
+            elif vegsperringtype == u'Trafikkavviser':
+                # It seems that roads with this kind of barrier are 
+                # best tagged as footways in OSM.
+                # I suppose the barrier itself could be anything.
+                noway_node.tags['barrier'] = 'yes'
+            elif vegsperringtype == u'Ukjent':
+                noway_node.tags['barrier'] = 'yes'
             else:
-                # There are conflicts between maxspeed:forward/maxspeed:backward and maxspeed
-                # Delete all
-                warn("Inconsistent maxspeed/maxspeed:forward/maxspeed:backward on TRANSID {}: {}/{}/{}".format(
-                   way.elveg_tags['TRANSID'],
-                   way.tags['maxspeed'],
-                   way.tags.get('maxspeed:forward'),
-                   way.tags.get('maxspeed:backward')))
-                way.tags.pop('maxspeed', None)
-                way.tags.pop('maxspeed:backward', None)
-                way.tags.pop('maxspeed:forward', None)
-    # Join maxspeed:forward and maxspeed:backward if they are equal
-    # (this should have been unnecessary, but such limits are present in the data)
-    if (way.tags.has_key('maxspeed:forward') and
-            way.tags.has_key('maxspeed:backward') and
-            way.tags['maxspeed:forward'] == way.tags['maxspeed:backward']):
-        way.tags['maxspeed'] = way.tags['maxspeed:forward']
-        del way.tags['maxspeed:forward']
-        del way.tags['maxspeed:backward']
-    # If there is only :forward or :backward, apply to whole way
-    if (way.tags.has_key('maxspeed:forward') and not way.tags.has_key('maxspeed:backward')):
-        way.tags['maxspeed'] = way.tags['maxspeed:forward']
-        del way.tags['maxspeed:forward']
-    if (way.tags.has_key('maxspeed:backward') and not way.tags.has_key('maxspeed:forward')):
-        way.tags['maxspeed'] = way.tags['maxspeed:backward']
-        del way.tags['maxspeed:backward']
-    # Remove the default speed limit of 50, since that may
-    # be only due to missing reporting
-    if (way.tags.get('maxspeed', None) == '50' and 
-            way.tags.get('highway',None) not in ('trunk', 'secondary')):
-        del way.tags['maxspeed']
-    # Remove speed limits for non-roads (footway, cycleway, etc.)
-    if (way.tags.has_key('maxspeed') and
-            way.tags.get('highway', None) not in ('trunk', 'secondary', 'road', 'unclassified')):
-        del way.tags['maxspeed']
+                warn(u"Unknown barrier: {0}".format(vegsperringtype))
+                noway_node.tags['barrier'] = 'yes'
+        elif noway_node.elveg_tags['OBJTYPE'] == 'Kommunedele':
+            # We do not use this tag, mark this node for deletion
+            noway_node.tags['DEBUG'] = 'Kommunedele'
+            noway_node.tags['action'] = 'delete'
+        elif noway_node.elveg_tags['OBJTYPE'] == 'Ferjekai':
+            # These nodes are not connected to the road network
+            # In OSM, they should ideally be on the node between the road and the ferry route.
+            noway_node.tags['amenity'] = 'ferry_terminal'
 
-# Save barriers that are not merged to other nodes to a separate file
-for id,node in osmobj.nodes.items():
-    if not node.way_ids:
-        osmobj_barriers.nodes[id] = node
-        del osmobj.nodes[id]
+    # TODO: Add amenity="ferry terminal" on nodes with OBJTYPE=Ferjekai
+
+    # Remove all ways and non-way nodes with action=delete and delete unused nodes
+
+    # Loop through ways, collect ways with action=delete and
+    # id of nodes in ways
+    to_delete = set()
+    nodes_used = set()
+    for way in osmobj.ways.itervalues():
+        if "action" in way.tags and way.tags['action'] == 'delete':
+            to_delete.add(way)
+        elif "nvdb:id" in way.tags and len(way.tags) == 1:
+            to_delete.add(way)
+        elif len(way.tags) == 0:
+            to_delete.add(way)
+        else:
+            for n in way.nds:
+                nodes_used.add(n)
+
+    # Collects nodes which should be deleted
+    for node in osmobj.nodes.itervalues():
+        if "action" in node.tags and node.tags['action'] == 'delete':
+            to_delete.add(node)
+        elif (node.id not in nodes_used) and (len(node.tags)) == 0:
+            to_delete.add(node)
+
+    # Delete objects from output and add them to a separate file
+    osmobj_deleted = ElvegOSM()
+    for element in to_delete:
+        osmobj.discard(element)
+        osmobj_deleted.add(element)
+        if hasattr(element, 'elveg_tags'):
+            element.tags.update({'Elveg:' + k:v for k,v in element.elveg_tags.iteritems()})
+
+    # Copy nodes needed by ways in osmobj_deleted
+    for delway in osmobj_deleted.ways.itervalues():
+        for nid in delway.nds:
+            if not osmobj_deleted.nodes.has_key(nid):
+                osmobj_deleted.add(osmobj.nodes[nid])
+
+    # Add way_id variable to every node which holds the way_ids of all ways
+    # it is part of.
+    # This is to be used in the node merging and must therefore be made after
+    # ways have been deleted above.
+    for node in osmobj.nodes.itervalues():
+        node.way_ids = set()
+    for way in osmobj.ways.itervalues():
+        for node_id in way.nds:
+            node = osmobj.nodes[node_id]
+            node.way_ids.add(way.id)
 
 
-# -- Merge ways with  same VNR/VPA and identical non-nvdb tags --
+    # Make a table with hash of indices of the nodes, in order to identify
+    # nodes with (exactly) the same coordinates
+    node_lookup = dict()
+    for id,node in osmobj.nodes.iteritems():
+        key = (node.lat, node.lon)
+        if node_lookup.has_key(key):
+            node_lookup[key].append(id)
+        else:
+            node_lookup[key] = [id]
 
-# Build index over roads with identical VNR/VPA
-vpa_index = {}
-for way_id,way in osmobj.ways.iteritems():
-    try:
-        vnr = way.elveg_tags['VNR']
-        vpa, start, stop = [s.strip(':;') for s in way.elveg_tags['VPA'].split()]
-    except KeyError:
-        continue
-    except AttributeError as e:
-        warn(str(e) + ' ' + str(way_id))
-        continue
-    if vpa_index.has_key((vnr, vpa)):
-        vpa_index[(vnr, vpa)].append(way_id)
+    # Merge nodes in same location
+    for coord, node_id_list in node_lookup.items():
+        if len(node_id_list) == 1:
+            continue
+        else:
+            merge_nodes(node_id_list)
+
+    # Speed limit cleanup
+    for id,way in osmobj.ways.iteritems():
+        # Remove maxspeed:forward or maxspeed:backward if maxspeed is present
+        # (i.e. inconsistent specification - either redundant or conflicting)
+        if way.tags.has_key('maxspeed:forward') or way.tags.has_key('maxspeed:backward'):
+            if way.tags.has_key('maxspeed'):
+                # Redundant or conflicting specification - report which before removing maxspeed
+                if (way.tags['maxspeed'] == way.tags.get('maxspeed:forward', way.tags['maxspeed']) and
+                        way.tags['maxspeed'] == way.tags.get('maxspeed:backward', way.tags['maxspeed'])):
+                    # Any maxspeed:forward and/or maxspeed:backward is compatible with maxspeed
+                    # Remove those of maxspeed:forward and maxspeed:backward that exists
+                    warn("Redundant maxspeed:forward and/or maxspeed:backward on TRANSID {}".format(way.elveg_tags['TRANSID']))
+                    way.tags.pop('maxspeed:backward', None)
+                    way.tags.pop('maxspeed:forward', None)
+                else:
+                    # There are conflicts between maxspeed:forward/maxspeed:backward and maxspeed
+                    # Delete all
+                    warn("Inconsistent maxspeed/maxspeed:forward/maxspeed:backward on TRANSID {}: {}/{}/{}".format(
+                       way.elveg_tags['TRANSID'],
+                       way.tags['maxspeed'],
+                       way.tags.get('maxspeed:forward'),
+                       way.tags.get('maxspeed:backward')))
+                    way.tags.pop('maxspeed', None)
+                    way.tags.pop('maxspeed:backward', None)
+                    way.tags.pop('maxspeed:forward', None)
+        # Join maxspeed:forward and maxspeed:backward if they are equal
+        # (this should have been unnecessary, but such limits are present in the data)
+        if (way.tags.has_key('maxspeed:forward') and
+                way.tags.has_key('maxspeed:backward') and
+                way.tags['maxspeed:forward'] == way.tags['maxspeed:backward']):
+            way.tags['maxspeed'] = way.tags['maxspeed:forward']
+            del way.tags['maxspeed:forward']
+            del way.tags['maxspeed:backward']
+        # If there is only :forward or :backward, apply to whole way
+        if (way.tags.has_key('maxspeed:forward') and not way.tags.has_key('maxspeed:backward')):
+            way.tags['maxspeed'] = way.tags['maxspeed:forward']
+            del way.tags['maxspeed:forward']
+        if (way.tags.has_key('maxspeed:backward') and not way.tags.has_key('maxspeed:forward')):
+            way.tags['maxspeed'] = way.tags['maxspeed:backward']
+            del way.tags['maxspeed:backward']
+        # Remove the default speed limit of 50, since that may
+        # be only due to missing reporting
+        if (way.tags.get('maxspeed', None) == '50' and 
+                way.tags.get('highway',None) not in ('trunk', 'secondary')):
+            del way.tags['maxspeed']
+        # Remove speed limits for non-roads (footway, cycleway, etc.)
+        if (way.tags.has_key('maxspeed') and
+                way.tags.get('highway', None) not in ('trunk', 'secondary', 'road', 'unclassified')):
+            del way.tags['maxspeed']
+
+    # Save barriers that are not merged to other nodes to a separate file
+    for id,node in osmobj.nodes.items():
+        if not node.way_ids:
+            osmobj_barriers.nodes[id] = node
+            del osmobj.nodes[id]
+
+
+    # -- Merge ways with  same VNR/VPA and identical non-nvdb tags --
+
+    # Build index over roads with identical VNR/VPA
+    vpa_index = {}
+    for way_id,way in osmobj.ways.iteritems():
+        try:
+            vnr = way.elveg_tags['VNR']
+            vpa, start, stop = [s.strip(':;') for s in way.elveg_tags['VPA'].split()]
+        except KeyError:
+            continue
+        except AttributeError as e:
+            warn(str(e) + ' ' + str(way_id))
+            continue
+        if vpa_index.has_key((vnr, vpa)):
+            vpa_index[(vnr, vpa)].append(way_id)
+        else:
+            vpa_index[(vnr, vpa)] = [way_id]
+
+    # Loop through all "groups" in vpa_index and merge what is possible
+    for merge_list in vpa_index.itervalues():
+        merge_equal(osmobj, merge_list)
+
+    # Reverse ways with oneway=-1
+    for id,way in osmobj.ways.iteritems():
+        if way.tags.get('oneway', None) == '-1':
+            way.nds.reverse()
+            way.tags['oneway'] = 'yes'
+
+    # TODO: Add turn restrictions from XXXXSving.txt
+
+    osmobj.save(osm_output)
+    osmobj_barriers.save(osm_barrier_output)
+    osmobj_deleted.save(osm_deleted_output)
+
+if __name__ == '__main__':
+    # Read input arguments
+    directory = sys.argv[1]
+    if len(sys.argv) >= 3:
+        kommune_number = sys.argv[2]
     else:
-        vpa_index[(vnr, vpa)] = [way_id]
-
-# Loop through all "groups" in vpa_index and merge what is possible
-for merge_list in vpa_index.itervalues():
-    merge_equal(osmobj, merge_list)
-
-# Reverse ways with oneway=-1
-for id,way in osmobj.ways.iteritems():
-    if way.tags.get('oneway', None) == '-1':
-        way.nds.reverse()
-        way.tags['oneway'] = 'yes'
-
-# TODO: Add turn restrictions from XXXXSving.txt
-
-osmobj.save(osm_output)
-osmobj_barriers.save(osm_barrier_output)
-osmobj_deleted.save(osm_deleted_output)
-
-
-
+        kommune_number = directory.strip('/')[-4:]
+        # Check that it is really a number
+        kummune_int = int(kommune_number)
+    
+    main(directory, kommune_number)
